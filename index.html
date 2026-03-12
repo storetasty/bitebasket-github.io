@@ -1093,9 +1093,9 @@ Please confirm & prepare the order! 🙏`;
             ).join('');
             document.getElementById('success-total').textContent = '₹' + total;
 
-            // group link kept for the "Join Group" button on success page
-            const groupLink = 'https://chat.whatsapp.com/GQ7lrtlv44g9zHr43lEQSJ?mode=gi_t';
-            document.getElementById('wa-group-link').href = groupLink;
+            // ── GROUP LINKS ───────────────────────────────────────────────────
+            const groupInviteLink = 'https://chat.whatsapp.com/HFHX3S4MSKx5D67W5bybe1?mode=gi_t';
+            document.getElementById('wa-group-link').href = groupInviteLink;
 
             // Show success page
             showView('success-view');
@@ -1108,33 +1108,58 @@ Please confirm & prepare the order! 🙏`;
                 window.speechSynthesis.speak(u);
             }, 600);
 
-            // ── AUTO-OPEN WHATSAPP WITH ORDER PRE-FILLED ─────────────────────
-            // whatsapp://send?text= works on ALL mobile devices (Android & iOS).
-            // WhatsApp opens instantly with the full order typed in the message bar.
-            // Customer just picks the group from recent chats and taps Send — 1 tap.
-            // No phone number needed = unlimited, no restrictions.
+            // ── AUTO JOIN GROUP + OPEN WITH PRE-FILLED ORDER ──────────────────
+            // Strategy:
+            //   1. Save the order message to sessionStorage.
+            //   2. Open the WhatsApp group invite link (chat.whatsapp.com/...).
+            //      - If user is NOT in the group → WhatsApp shows "Join" screen, they join.
+            //      - If user IS already in the group → WhatsApp opens the group chat directly.
+            //   3. On returning to the page (visibilitychange), auto-fire whatsapp://send?text=
+            //      so the message is pre-filled and customer just taps Send.
+            // This is the only reliable cross-platform method — WhatsApp blocks ?text= on group invite URLs.
+
             setTimeout(() => {
                 const encoded = encodeURIComponent(message);
-                // Try native app deep link first (works on mobile)
-                const appLink = 'whatsapp://send?text=' + encoded;
-                // Web fallback for desktop browsers
-                const webLink = 'https://wa.me/?text=' + encoded;
+                sessionStorage.setItem('bb_pending_wa_msg', encoded);
 
-                // Use a hidden anchor trick to trigger native app on mobile
-                const a = document.createElement('a');
-                a.href = appLink;
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                // Open group invite — auto-join if not a member, open chat if already joined
+                window.open(groupInviteLink, '_blank');
 
-                // Fallback: if app didn't open in 1.5s, open web link
-                // (handles desktop / WhatsApp not installed edge case)
+                // When user comes back to this tab, fire the pre-filled message deep link
+                const fireMsg = () => {
+                    const pendingMsg = sessionStorage.getItem('bb_pending_wa_msg');
+                    if (!pendingMsg) return;
+                    sessionStorage.removeItem('bb_pending_wa_msg');
+
+                    // Small delay so WhatsApp has finished processing the join/open
+                    setTimeout(() => {
+                        // Native app deep link — opens WhatsApp with message pre-typed
+                        const appLink = 'whatsapp://send?text=' + pendingMsg;
+                        const a = document.createElement('a');
+                        a.href = appLink;
+                        a.style.display = 'none';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+
+                        // Desktop / web fallback
+                        setTimeout(() => {
+                            if (document.visibilityState === 'visible') {
+                                window.open('https://wa.me/?text=' + pendingMsg, '_blank');
+                            }
+                        }, 1500);
+                    }, 600);
+
+                    document.removeEventListener('visibilitychange', fireMsg);
+                };
+
+                document.addEventListener('visibilitychange', fireMsg);
+
+                // Safety net: if user never leaves tab (desktop), fire after 3s anyway
                 setTimeout(() => {
-                    if (document.visibilityState === 'visible') {
-                        window.open(webLink, '_blank');
-                    }
-                }, 1500);
+                    if (sessionStorage.getItem('bb_pending_wa_msg')) fireMsg();
+                }, 3000);
+
             }, 800);
 
             // Clear cart
