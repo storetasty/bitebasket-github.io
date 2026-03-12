@@ -1108,105 +1108,73 @@ Please confirm & prepare the order! 🙏`;
                 window.speechSynthesis.speak(u);
             }, 600);
 
-            // ── AUTO JOIN + PRE-FILLED MESSAGE ────────────────────────────────
-            // How it works:
-            //   Step 1 (800ms)  → Open group invite link in same tab.
-            //                     Not a member → WhatsApp shows Join button → they join.
-            //                     Already a member → group chat opens directly.
-            //   Step 2 (return) → visibilitychange fires when user comes back.
-            //                     We immediately redirect to whatsapp://send?text= which
-            //                     re-opens WhatsApp with message pre-typed in last open chat
-            //                     (which is now the group they just opened/joined).
-            //                     User just taps SEND.
-            //
-            // NOTE: WhatsApp intentionally blocks ?text= on chat.whatsapp.com invite URLs.
-            // The two-step redirect is the ONLY method that achieves autofill for groups.
-
+            // ── BULLETPROOF AUTO-JOIN + AUTOFILL FLOW ─────────────────────────
+            // STEP 1: Save encoded message to localStorage (survives page navigation).
+            // STEP 2: Redirect this tab to the group invite link.
+            //         → Not a member: WhatsApp shows "Join Group" → they tap Join → group opens.
+            //         → Already a member: group chat opens directly.
+            // STEP 3: When the browser returns to this page (back button or app switch),
+            //         the pageshow/load event fires, reads the saved message from localStorage,
+            //         and immediately fires whatsapp://send?text= which opens WhatsApp with
+            //         the message pre-typed. Since the group was the last open chat, it
+            //         lands directly in the group compose bar. User taps SEND. Done.
             setTimeout(() => {
                 const encoded = encodeURIComponent(message);
-
-                // Store message for after-return use
-                sessionStorage.setItem('bb_pending_wa_msg', encoded);
-                sessionStorage.setItem('bb_pending_wa_ts',  Date.now().toString());
-
-                // Detect platform
-                const isAndroid = /android/i.test(navigator.userAgent);
-                const isIOS     = /iphone|ipad|ipod/i.test(navigator.userAgent);
-                const isMobile  = isAndroid || isIOS;
-
-                if (isMobile) {
-                    // On mobile: navigate in same tab to group invite.
-                    // When user presses back / WhatsApp opens, visibilitychange fires.
-                    window.location.href = groupInviteLink;
-                } else {
-                    // On desktop: open group in new tab, fire prefill after 2.5s
-                    window.open(groupInviteLink, '_blank');
-                    setTimeout(() => {
-                        window.open('https://wa.me/?text=' + encoded, '_blank');
-                    }, 2500);
-                }
-            }, 800);
+                localStorage.setItem('bb_wa_pending_msg', encoded);
+                localStorage.setItem('bb_wa_pending_ts',  Date.now().toString());
+                // Navigate same tab → group invite opens in WhatsApp
+                window.location.href = groupInviteLink;
+            }, 900);
 
             // Clear cart
             cart = [];
             updateCartUI();
         }
 
-        // ── HANDLE RETURN FROM WHATSAPP (mobile back navigation) ─────────────
-        // When user comes back from WhatsApp group invite page, fire the
-        // pre-filled message deep link immediately so it lands in the group chat.
-        (function() {
-            function tryFirePendingWA() {
-                const encoded = sessionStorage.getItem('bb_pending_wa_msg');
-                const ts      = parseInt(sessionStorage.getItem('bb_pending_wa_ts') || '0');
+        // ── ON PAGE LOAD / RETURN: fire autofill if pending message exists ────
+        // This runs every time the page loads. If the user is returning from the
+        // group invite redirect, localStorage will have the pending message and
+        // we fire the WhatsApp deep link immediately to autofill the compose bar.
+        (function fireWAOnReturn() {
+            function doFire() {
+                const encoded = localStorage.getItem('bb_wa_pending_msg');
+                const ts      = parseInt(localStorage.getItem('bb_wa_pending_ts') || '0');
                 if (!encoded) return;
-                // Only act within 5 minutes of order
-                if (Date.now() - ts > 300000) {
-                    sessionStorage.removeItem('bb_pending_wa_msg');
-                    sessionStorage.removeItem('bb_pending_wa_ts');
+                // Expire after 10 minutes
+                if (Date.now() - ts > 600000) {
+                    localStorage.removeItem('bb_wa_pending_msg');
+                    localStorage.removeItem('bb_wa_pending_ts');
                     return;
                 }
-                sessionStorage.removeItem('bb_pending_wa_msg');
-                sessionStorage.removeItem('bb_pending_wa_ts');
+                localStorage.removeItem('bb_wa_pending_msg');
+                localStorage.removeItem('bb_wa_pending_ts');
 
-                const isAndroid = /android/i.test(navigator.userAgent);
-                const isIOS     = /iphone|ipad|ipod/i.test(navigator.userAgent);
+                const ua        = navigator.userAgent;
+                const isAndroid = /android/i.test(ua);
+                const isIOS     = /iphone|ipad|ipod/i.test(ua);
 
-                if (isAndroid) {
-                    // Android: intent:// deep link opens WhatsApp directly into last-open chat
-                    // (which is the group they just joined/opened) with text pre-filled
-                    const intentLink = 'intent://send?text=' + encoded +
-                        '#Intent;scheme=whatsapp;package=com.whatsapp;end';
-                    window.location.href = intentLink;
-                } else if (isIOS) {
-                    // iOS: whatsapp:// scheme
-                    window.location.href = 'whatsapp://send?text=' + encoded;
-                } else {
-                    window.open('https://wa.me/?text=' + encoded, '_blank');
-                }
+                setTimeout(() => {
+                    if (isAndroid) {
+                        // Android intent — opens WhatsApp into last active chat (the group)
+                        // with message pre-typed in compose bar
+                        window.location.href =
+                            'intent://send?text=' + encoded +
+                            '#Intent;scheme=whatsapp;package=com.whatsapp;end';
+                    } else if (isIOS) {
+                        // iOS URL scheme — same effect
+                        window.location.href = 'whatsapp://send?text=' + encoded;
+                    } else {
+                        // Desktop fallback
+                        window.open('https://wa.me/?text=' + encoded, '_blank');
+                    }
+                }, 300);
             }
 
-            // Fire on visibilitychange (user comes back to tab / app)
-            document.addEventListener('visibilitychange', function handler() {
-                if (document.visibilityState === 'visible') {
-                    document.removeEventListener('visibilitychange', handler);
-                    // Small delay to let the browser fully resume
-                    setTimeout(tryFirePendingWA, 400);
-                }
-            });
-
-            // Also fire on pageshow (iOS back-forward cache)
+            // pageshow covers: back/forward cache (iOS Safari), normal load, soft reload
             window.addEventListener('pageshow', function(e) {
-                if (e.persisted) {
-                    setTimeout(tryFirePendingWA, 400);
-                }
-            });
-
-            // On page load: if returning from group invite redirect, fire immediately
-            window.addEventListener('load', function() {
-                if (sessionStorage.getItem('bb_pending_wa_msg')) {
-                    setTimeout(tryFirePendingWA, 500);
-                }
+                // e.persisted = true when loaded from bfcache (iOS back button)
+                // always run doFire — it self-guards via localStorage check
+                doFire();
             });
         })();
 
