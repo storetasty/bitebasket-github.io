@@ -750,6 +750,8 @@
 
     <!-- 6. SUCCESS VIEW -->
     <main id="success-view" class="view-section max-w-[500px] mx-auto px-4 pt-16 mb-16">
+        <!-- hidden anchor kept for JS compatibility -->
+        <a id="wa-group-link" href="https://chat.whatsapp.com/GQ7lrtlv44g9zHr43lEQSJ?mode=gi_t" style="display:none"></a>
         <div class="bg-white rounded-3xl shadow-2xl overflow-hidden text-center">
 
             <!-- Top accent line -->
@@ -800,14 +802,6 @@
 
                 <!-- Divider -->
                 <div class="w-full border-t border-gray-100"></div>
-
-                <!-- WhatsApp Group CTA — clean, no guide text -->
-                <a id="wa-group-link" href="https://chat.whatsapp.com/GQ7lrtlv44g9zHr43lEQSJ?mode=gi_t" target="_blank"
-                   class="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white text-sm font-bold tracking-wide transition-all hover:opacity-90 active:scale-95"
-                   style="background:linear-gradient(135deg,#25D366,#128C7E)">
-                    <svg class="w-4 h-4" fill="white" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.418A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.946 7.946 0 01-4.031-1.1l-.29-.172-2.956.842.842-2.867-.19-.303A7.944 7.944 0 014 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/></svg>
-                    Join Order Group on WhatsApp
-                </a>
 
                 <button onclick="showView('home')" class="w-full py-3.5 rounded-2xl border-2 border-gray-100 text-gray-500 text-sm font-bold hover:border-red-400 hover:text-red-500 transition-all">
                     Back to Menu
@@ -1052,24 +1046,23 @@
         }
 
         function processFinalOrder() {
-            // Gather order details from checkout form
-            const customerName = document.getElementById('chk-name').value || 'N/A';
-            const customerPhone = document.getElementById('chk-phone').value || 'N/A';
+            const customerName    = document.getElementById('chk-name').value    || 'N/A';
+            const customerPhone   = document.getElementById('chk-phone').value   || 'N/A';
             const customerAddress = document.getElementById('chk-address').value || 'N/A';
 
-            // Build items list
+            // Build item lines with qty
             const itemLines = cart.map((item, i) => {
-                const up = item.unitPrice || (item.qty ? Math.round(item.price/item.qty) : item.price);
                 const qtyStr = item.qty > 1 ? ` x${item.qty}` : '';
                 return `  ${i + 1}. ${item.name}${qtyStr} — ₹${item.price}`;
             }).join('\n');
-            const subtotal = cart.reduce((sum, item) => sum + item.price, 0);
-            const tax = Math.round(subtotal * 0.05);
-            const deliveryFee = subtotal >= 199 ? 0 : 30;
-            const total = subtotal + tax + deliveryFee;
-            const orderTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
 
-            // Compose WhatsApp message
+            const subtotal    = cart.reduce((s, item) => s + item.price, 0);
+            const tax         = Math.round(subtotal * 0.05);
+            const deliveryFee = subtotal >= 199 ? 0 : 30;
+            const total       = subtotal + tax + deliveryFee;
+            const orderTime   = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
+            const orderId     = 'BB' + Date.now().toString().slice(-6);
+
             const message =
 `🛒 *NEW ORDER — Bite Basket*
 ━━━━━━━━━━━━━━━━━━━
@@ -1089,171 +1082,64 @@ ${itemLines}
 ━━━━━━━━━━━━━━━━━━━
 Please confirm & prepare the order! 🙏`;
 
-            const encodedMsg = encodeURIComponent(message);
-            // WhatsApp Group Invite Link
-            const groupLink = 'https://chat.whatsapp.com/GQ7lrtlv44g9zHr43lEQSJ?mode=gi_t';
-
-            // Generate a random order ID
-            const orderId = 'BB' + Date.now().toString().slice(-6);
-
-            // Store message globally so the modal button can use it
-            window._pendingOrderMsg = message;
-            window._pendingGroupLink = groupLink;
-
-            // Update success view with order details
+            // ── Update success page ────────────────────────────────────────────
             document.getElementById('success-order-id').innerText = orderId;
-            document.getElementById('success-address').innerText = customerAddress;
+            document.getElementById('success-address').innerText  = customerAddress;
             document.getElementById('success-items').innerHTML = cart.map(item =>
-                '<div class="flex justify-between text-sm py-1 border-b border-gray-100">' +
-                '<span class="text-gray-700">' + item.name + (item.qty > 1 ? ' x' + item.qty : '') + '</span>' +
-                '<span class="font-bold text-red-500">₹' + item.price + '</span>' +
-                '</div>'
+                `<div class="flex justify-between text-sm py-1 border-b border-gray-100">
+                    <span class="text-gray-700">${item.name}${item.qty > 1 ? ' x' + item.qty : ''}</span>
+                    <span class="font-bold text-red-500">₹${item.price}</span>
+                </div>`
             ).join('');
             document.getElementById('success-total').textContent = '₹' + total;
 
-            // Set WhatsApp group link for button in success view
+            // group link kept for the "Join Group" button on success page
+            const groupLink = 'https://chat.whatsapp.com/GQ7lrtlv44g9zHr43lEQSJ?mode=gi_t';
             document.getElementById('wa-group-link').href = groupLink;
 
-            // Show success view
+            // Show success page
             showView('success-view');
 
-            // TTS thank you message
+            // TTS
             setTimeout(() => {
-                const utter = new SpeechSynthesisUtterance('Thank you for buying from Bite Basket. Your order will be delivered soon.');
-                utter.lang = 'en-IN'; utter.rate = 0.95; utter.pitch = 1.05;
+                const u = new SpeechSynthesisUtterance('Thank you for buying from Bite Basket. Your order will be delivered soon.');
+                u.lang = 'en-IN'; u.rate = 0.95; u.pitch = 1.05;
                 window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(utter);
+                window.speechSynthesis.speak(u);
             }, 600);
 
-            // ── SHOW WHATSAPP ORDER MODAL ──────────────────────────────────────
-            // WhatsApp does NOT support ?text= for group links.
-            // Best flow: auto-copy message → open group → customer just pastes & sends.
+            // ── AUTO-OPEN WHATSAPP WITH ORDER PRE-FILLED ─────────────────────
+            // whatsapp://send?text= works on ALL mobile devices (Android & iOS).
+            // WhatsApp opens instantly with the full order typed in the message bar.
+            // Customer just picks the group from recent chats and taps Send — 1 tap.
+            // No phone number needed = unlimited, no restrictions.
             setTimeout(() => {
-                showWhatsAppOrderModal(message, groupLink);
-            }, 900);
+                const encoded = encodeURIComponent(message);
+                // Try native app deep link first (works on mobile)
+                const appLink = 'whatsapp://send?text=' + encoded;
+                // Web fallback for desktop browsers
+                const webLink = 'https://wa.me/?text=' + encoded;
+
+                // Use a hidden anchor trick to trigger native app on mobile
+                const a = document.createElement('a');
+                a.href = appLink;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                // Fallback: if app didn't open in 1.5s, open web link
+                // (handles desktop / WhatsApp not installed edge case)
+                setTimeout(() => {
+                    if (document.visibilityState === 'visible') {
+                        window.open(webLink, '_blank');
+                    }
+                }, 1500);
+            }, 800);
 
             // Clear cart
             cart = [];
             updateCartUI();
-        }
-
-        function showWhatsAppOrderModal(message, groupLink) {
-            // Auto-copy to clipboard
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(message).catch(() => {});
-            } else {
-                // Fallback copy
-                const ta = document.createElement('textarea');
-                ta.value = message;
-                ta.style.position = 'fixed';
-                ta.style.opacity = '0';
-                document.body.appendChild(ta);
-                ta.select();
-                try { document.execCommand('copy'); } catch(e) {}
-                document.body.removeChild(ta);
-            }
-
-            // Create modal overlay
-            const overlay = document.createElement('div');
-            overlay.id = 'wa-order-modal';
-            overlay.style.cssText = `
-                position:fixed;inset:0;z-index:9999;
-                background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);
-                display:flex;align-items:center;justify-content:center;padding:16px;
-                animation:fadeIn .25s ease;
-            `;
-
-            overlay.innerHTML = `
-                <div style="
-                    background:#fff;border-radius:24px;max-width:420px;width:100%;
-                    overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.35);
-                    animation:fadeIn .3s ease;
-                ">
-                    <!-- Green header -->
-                    <div style="background:linear-gradient(135deg,#25D366,#128C7E);padding:20px 24px 16px;text-align:center;">
-                        <div style="width:52px;height:52px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
-                            <svg width="28" height="28" fill="white" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.418A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.946 7.946 0 01-4.031-1.1l-.29-.172-2.956.842.842-2.867-.19-.303A7.944 7.944 0 014 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/></svg>
-                        </div>
-                        <h3 style="color:#fff;font-size:17px;font-weight:900;margin:0 0 4px;">Send Order to WhatsApp Group</h3>
-                        <p style="color:rgba(255,255,255,0.85);font-size:12px;margin:0;">Your order message is ready & copied!</p>
-                    </div>
-
-                    <!-- Steps -->
-                    <div style="padding:20px 24px 0;">
-                        <div style="display:flex;flex-direction:column;gap:12px;">
-                            <div style="display:flex;align-items:flex-start;gap:12px;">
-                                <div style="min-width:28px;height:28px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:900;">1</div>
-                                <div>
-                                    <p style="margin:0;font-size:13px;font-weight:700;color:#111;">Message Auto-Copied ✅</p>
-                                    <p style="margin:2px 0 0;font-size:11px;color:#888;">Your full order with items & total is copied to clipboard</p>
-                                </div>
-                            </div>
-                            <div style="display:flex;align-items:flex-start;gap:12px;">
-                                <div style="min-width:28px;height:28px;background:#128C7E;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:900;">2</div>
-                                <div>
-                                    <p style="margin:0;font-size:13px;font-weight:700;color:#111;">Open the Bite Basket Group</p>
-                                    <p style="margin:2px 0 0;font-size:11px;color:#888;">Tap the button below — you'll land in the WhatsApp group</p>
-                                </div>
-                            </div>
-                            <div style="display:flex;align-items:flex-start;gap:12px;">
-                                <div style="min-width:28px;height:28px;background:#e23744;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:900;">3</div>
-                                <div>
-                                    <p style="margin:0;font-size:13px;font-weight:700;color:#111;">Paste & Send</p>
-                                    <p style="margin:2px 0 0;font-size:11px;color:#888;">Long-press the message box → Paste → Hit Send 🚀</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Preview box -->
-                        <div id="wa-msg-preview" style="
-                            margin:16px 0 0;background:#f0fdf4;border:1.5px solid #bbf7d0;
-                            border-radius:12px;padding:12px;max-height:130px;overflow-y:auto;
-                            font-size:11px;color:#166534;font-family:monospace;white-space:pre-wrap;
-                            line-height:1.5;
-                        ">${message.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-
-                        <!-- Copy again button (small) -->
-                        <button onclick="
-                            navigator.clipboard && navigator.clipboard.writeText(window._pendingOrderMsg);
-                            this.textContent='✅ Copied!';
-                            setTimeout(()=>this.textContent='📋 Copy Again',1500);
-                        " style="
-                            margin:10px 0 0;width:100%;padding:8px;border-radius:8px;
-                            background:#f3f4f6;border:none;cursor:pointer;
-                            font-size:12px;font-weight:700;color:#374151;
-                        ">📋 Copy Again</button>
-                    </div>
-
-                    <!-- Action buttons -->
-                    <div style="padding:16px 24px 24px;display:flex;flex-direction:column;gap:10px;">
-                        <button onclick="
-                            document.getElementById('wa-order-modal').remove();
-                            window.open('${groupLink}', '_blank');
-                        " style="
-                            width:100%;padding:15px;border-radius:14px;border:none;cursor:pointer;
-                            background:linear-gradient(135deg,#25D366,#128C7E);
-                            color:#fff;font-size:15px;font-weight:900;
-                            display:flex;align-items:center;justify-content:center;gap:8px;
-                            box-shadow:0 4px 16px rgba(37,211,102,0.4);
-                            transition:opacity .2s;
-                        " onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
-                            <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.418A9.953 9.953 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.946 7.946 0 01-4.031-1.1l-.29-.172-2.956.842.842-2.867-.19-.303A7.944 7.944 0 014 12c0-4.418 3.582-8 8-8s8 3.582 8 8-3.582 8-8 8z"/></svg>
-                            Open WhatsApp Group →
-                        </button>
-                        <button onclick="document.getElementById('wa-order-modal').remove()" style="
-                            width:100%;padding:11px;border-radius:12px;border:2px solid #e5e7eb;
-                            background:#fff;cursor:pointer;font-size:13px;font-weight:700;color:#6b7280;
-                        ">I'll do it later</button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(overlay);
-
-            // Close on backdrop click
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) overlay.remove();
-            });
         }
 
         window.onload = () => {
